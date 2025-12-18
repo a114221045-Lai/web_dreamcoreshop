@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "buildCommand": "npm install",
   "env": {
     "OPENROUTER_API_KEY": "@openrouter_api_key",
     "OPENROUTER_MODEL": "google/gemma-3-27b-it:free",
@@ -12,10 +11,6 @@
     {
       "src": "backend/server.js",
       "use": "@vercel/node"
-    },
-    {
-      "src": "public/**/*",
-      "use": "@vercel/static"
     }
   ],
   "routes": [
@@ -29,3 +24,4 @@
     }
   ]
 }
+
