@@ -169,10 +169,12 @@ document.addEventListener('DOMContentLoaded', () => {
       let data
       try {
         data = JSON.parse(responseText)
-        console.log('[Chat] JSON 解析成功')
+        console.log('[Chat] ✅ JSON 解析成功')
+        console.log('[Chat] 回應狀態:', data.status)
       } catch (parseErr) {
-        console.error('[Chat] JSON 解析失敗:', parseErr.message)
-        console.error('[Chat] 完整回應:', responseText)
+        console.error('[Chat] ❌ JSON 解析失敗:', parseErr.message)
+        console.error('[Chat] 原始回應長度:', responseText.length)
+        console.error('[Chat] 完整回應:', responseText.substring(0, 500))
         
         // 移除載入提示
         if (messagesEl.contains(loadingEl)) {
@@ -222,11 +224,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         const errorMsg = data.error || '未知錯誤'
-        console.error('[Chat] API 返回 ok: false', errorMsg)
+        const errorStatus = data.status || 'unknown'
+        console.error('[Chat] ❌ API 返回失敗:', { error: errorMsg, status: errorStatus })
+        console.error('[Chat] 完整錯誤回應:', data)
         
         const botMsgEl = document.createElement('div')
         botMsgEl.className = 'message bot error'
-        botMsgEl.textContent = `❌ 錯誤：${errorMsg}`
+        botMsgEl.textContent = `❌ 錯誤 [${errorStatus}]：${errorMsg}`
         messagesEl.appendChild(botMsgEl)
         messagesEl.scrollTop = messagesEl.scrollHeight
         return { success: false, message: errorMsg }
@@ -237,10 +241,51 @@ document.addEventListener('DOMContentLoaded', () => {
         messagesEl.removeChild(loadingEl)
       }
       
-      // 解析 AI 回應 - 支援多種回應格式
+      // 解析 AI 回應 - 支持 OpenRouter 標準格式
       let aiResponse = '無法解析回應'
+      console.log('[Chat] 開始解析 AI 回應...')
+      console.log('[Chat] response 結構:', {
+        hasChoices: !!data.response?.choices,
+        choicesLength: data.response?.choices?.length,
+        hasContent: !!data.response?.choices?.[0]?.message?.content
+      })
       
       if (data.response?.choices?.[0]?.message?.content) {
+        // OpenRouter SDK 標準格式
+        aiResponse = data.response.choices[0].message.content
+        console.log('[Chat] ✅ 使用 OpenRouter 標準格式: choices[0].message.content')
+      } else if (data.response?.content) {
+        // 簡化格式
+        aiResponse = data.response.content
+        console.log('[Chat] ✅ 使用簡化格式: response.content')
+      } else if (typeof data.response === 'string') {
+        // 直接字串回應
+        aiResponse = data.response
+        console.log('[Chat] ✅ 使用直接字串格式')
+      } else if (data.response?.text) {
+        // 另一種格式
+        aiResponse = data.response.text
+        console.log('[Chat] ✅ 使用 text 格式')
+      } else {
+        // 無法解析
+        console.error('[Chat] ❌ 無法解析回應結構:', JSON.stringify(data.response).substring(0, 300))
+      }
+      
+      if (aiResponse === '無法解析回應') {
+        const parseErr = new Error('無法從回應中提取 AI 訊息')
+        if (messagesEl.contains(loadingEl)) {
+          messagesEl.removeChild(loadingEl)
+        }
+        const botMsgEl = document.createElement('div')
+        botMsgEl.className = 'message bot error'
+        botMsgEl.textContent = `❌ 解析失敗：${parseErr.message}`
+        messagesEl.appendChild(botMsgEl)
+        messagesEl.scrollTop = messagesEl.scrollHeight
+        return { success: false, message: parseErr.message }
+      }
+      
+      console.log('[Chat] ✅ 成功獲取 AI 回應:', aiResponse.substring(0, 50) + '...')
+      console.log('[Chat] 回應長度:', aiResponse.length, '字元')
         // OpenRouter SDK 格式
         aiResponse = data.response.choices[0].message.content
       } else if (data.response?.content) {
