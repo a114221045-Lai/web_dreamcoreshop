@@ -12,8 +12,8 @@
   * API Endpoint：透過 SDK 自動處理,請參考下面TypeScript SDK 程式碼開發
   * 模型：設定為 `google/gemma-3-27b-it:free`，並設置參數在.env下
   * API Key 請從環境變數 .env. 讀取 API_KEY 的值
-  * 請將 AIP Key 新增至 .env 檔案中, API_KEY=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
-  ** backup：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
+  * 請將 AIP Key 新增至 .env 檔案中, API_KEY=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
+  
 
     '''TypeScript SDK
  

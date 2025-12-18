@@ -2,6 +2,7 @@
   "name": "dreamcore-shop",
   "version": "0.1.0",
   "private": true,
+  "description": "夢核物品販賣部 - 異次元物流股份有限公司",
   "engines": {
     "node": ">=18"
   },
