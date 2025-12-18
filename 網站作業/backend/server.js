@@ -70,24 +70,51 @@ app.post('/api/contact', (req, res) => {
     const { name, email, message } = req.body
 
     // 驗證必填欄位
-    if (!name || !email || !message) {
-      return res.status(400).json({ ok: false, error: '名字、信箱和訊息為必填項目' })
+    const errors = {}
+    if (!name || name.trim() === '') {
+      errors.name = '姓名不能為空'
+    }
+    if (!email || email.trim() === '') {
+      errors.email = 'Email 不能為空'
+    }
+    if (!message || message.trim() === '') {
+      errors.message = '訊息不能為空'
     }
 
-    // 簡單的電子郵件驗證
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ ok: false, error: '請提供有效的電子郵件地址' })
+    // Email 驗證 (RFC 5322 相容)
+    // 支持: 多個點、連字號、加號尋址 (user+tag@sub-domain.example.co.uk)
+    const emailRegex = /^[a-zA-Z0-9._+%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+    if (email && !emailRegex.test(email.trim())) {
+      errors.email = '請提供有效的電子郵件地址'
     }
 
-    console.log(`[${new Date().toISOString()}] Contact form submitted:`, { name, email, messageLength: message.length })
+    // 如果有驗證錯誤，返回詳細訊息
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: Object.values(errors)[0],
+        errors: errors
+      })
+    }
+
+    console.log(`[${new Date().toISOString()}] Contact form submitted:`, { 
+      name: name.trim(), 
+      email: email.trim(), 
+      messageLength: message.length 
+    })
 
     // 這裡可以添加發送郵件或保存到數據庫的邏輯
     // 目前只返回成功狀態
-    res.json({ ok: true, message: '感謝您的訊息，我們會盡快回覆' })
+    res.json({ 
+      ok: true, 
+      message: '感謝您的訊息，我們會盡快回覆您'
+    })
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Contact error:`, err && err.message ? err.message : err)
-    res.status(500).json({ ok: false, error: '提交聯絡表單時出錯' })
+    res.status(500).json({ 
+      ok: false, 
+      error: '提交聯絡表單時出錯，請稍後重試' 
+    })
   }
 })
 
