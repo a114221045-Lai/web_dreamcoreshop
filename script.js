@@ -215,19 +215,24 @@ const contactForm = document.getElementById('contact-form')
         ? 'http://localhost:3000/api/contact'
         : `${window.location.origin}/api/contact`
       
-      const response = await fetch(apiUrl, {
+      const response = await fetch('/api/contact', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values)
-      })
-
-      let data
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' }
+        })
+      .then(async (response) => {
+        const text = await response.text();
       try {
-        data = await response.json()
-      } catch (parseErr) {
-        console.error('JSON parse error:', parseErr)
-        throw new Error('服務器回應格式錯誤')
+        const json = JSON.parse(text);
+        return json;
+      } catch (e) {
+        throw new Error("服務器回應格式錯誤: " + text);
       }
+})
+.catch(err => {
+  console.error("Contact form error:", err);
+});
+
 
       if (response.ok && data.ok) {
         alert('✅ 成功！\n' + data.message)
