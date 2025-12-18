@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
   })
 
   /**
-   * 傳送聊天訊息至後端
+   * 傳送聊天訊息至後端 - 含超時控制和改進的錯誤處理
    * @returns {Promise<{success: boolean, message: string}>}
    */
   async function sendMessage() {
@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 顯示載入中提示
     const loadingEl = document.createElement('div')
     loadingEl.className = 'message bot loading'
-    loadingEl.textContent = 'AI 正在思考...'
+    loadingEl.innerHTML = '⏳ AI 思考中... <span class="dot-animation"></span>'
     messagesEl.appendChild(loadingEl)
     messagesEl.scrollTop = messagesEl.scrollHeight
 
@@ -104,11 +104,11 @@ document.addEventListener('DOMContentLoaded', () => {
         ? 'http://localhost:3000/api/chat'
         : `${window.location.origin}/api/chat`
       
-      console.log('[Chat] 發送請求到:', apiUrl)
+      console.log('[Chat] 發送請求到:', apiUrl, '超時時間: 45秒')
       console.log('[Chat] 消息:', userText)
       
-      // 發送 API 請求
-      const response = await fetch(apiUrl, {
+      // 建立超時 Promise (45 秒 = 前端超時 > 後端超時 30 秒)
+      const fetchPromise = fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -116,6 +116,32 @@ document.addEventListener('DOMContentLoaded', () => {
           model: 'google/gemma-3-27b-it:free'
         })
       })
+
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('⏱️ 請求超時 (45秒)，OpenRouter 伺服器可能不可用或響應緩慢。請檢查 API Key 或稍後重試'))
+        }, 45000)
+      })
+
+      // 與超時 Promise 賽跑
+      let response
+      try {
+        response = await Promise.race([fetchPromise, timeoutPromise])
+      } catch (timeoutErr) {
+        // 移除載入提示
+        if (messagesEl.contains(loadingEl)) {
+          messagesEl.removeChild(loadingEl)
+        }
+        
+        const botMsgEl = document.createElement('div')
+        botMsgEl.className = 'message bot error'
+        botMsgEl.textContent = timeoutErr.message
+        messagesEl.appendChild(botMsgEl)
+        messagesEl.scrollTop = messagesEl.scrollHeight
+        
+        console.error('[Chat] 超時錯誤:', timeoutErr.message)
+        return { success: false, message: timeoutErr.message }
+      }
 
       console.log('[Chat] HTTP 狀態:', response.status, response.statusText)
       
@@ -127,9 +153,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // 檢查響應是否為空
       if (!responseText || responseText.trim().length === 0) {
         // 移除載入提示
-        messagesEl.removeChild(loadingEl)
+        if (messagesEl.contains(loadingEl)) {
+          messagesEl.removeChild(loadingEl)
+        }
         const botMsgEl = document.createElement('div')
-        botMsgEl.className = 'message bot'
+        botMsgEl.className = 'message bot error'
         botMsgEl.textContent = `❌ 伺服器錯誤：空回應 (HTTP ${response.status})`
         messagesEl.appendChild(botMsgEl)
         console.error('[Chat] 錯誤：伺服器返回空回應')
@@ -147,19 +175,21 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('[Chat] 完整回應:', responseText)
         
         // 移除載入提示
-        messagesEl.removeChild(loadingEl)
+        if (messagesEl.contains(loadingEl)) {
+          messagesEl.removeChild(loadingEl)
+        }
         
         // 判斷是否為 HTML 錯誤頁面
         if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
           const botMsgEl = document.createElement('div')
-          botMsgEl.className = 'message bot'
+          botMsgEl.className = 'message bot error'
           botMsgEl.textContent = `❌ API 路由錯誤 (HTTP ${response.status})：可能後端未正確配置或服務未運行`
           messagesEl.appendChild(botMsgEl)
           return { success: false, message: 'API 路由錯誤，請檢查後端配置' }
         }
         
         const botMsgEl = document.createElement('div')
-        botMsgEl.className = 'message bot'
+        botMsgEl.className = 'message bot error'
         botMsgEl.textContent = `❌ 伺服器返回無效 JSON (HTTP ${response.status})`
         messagesEl.appendChild(botMsgEl)
         messagesEl.scrollTop = messagesEl.scrollHeight
@@ -169,13 +199,15 @@ document.addEventListener('DOMContentLoaded', () => {
       // 檢查 HTTP 狀態
       if (!response.ok) {
         // 移除載入提示
-        messagesEl.removeChild(loadingEl)
+        if (messagesEl.contains(loadingEl)) {
+          messagesEl.removeChild(loadingEl)
+        }
         
         const errorMsg = data.error || `HTTP 錯誤 ${response.status}`
         console.error('[Chat] 伺服器錯誤:', errorMsg)
         
         const botMsgEl = document.createElement('div')
-        botMsgEl.className = 'message bot'
+        botMsgEl.className = 'message bot error'
         botMsgEl.textContent = `❌ 伺服器錯誤：${errorMsg}`
         messagesEl.appendChild(botMsgEl)
         messagesEl.scrollTop = messagesEl.scrollHeight
@@ -185,13 +217,15 @@ document.addEventListener('DOMContentLoaded', () => {
       // 檢查業務邏輯狀態
       if (!data.ok) {
         // 移除載入提示
-        messagesEl.removeChild(loadingEl)
+        if (messagesEl.contains(loadingEl)) {
+          messagesEl.removeChild(loadingEl)
+        }
         
         const errorMsg = data.error || '未知錯誤'
         console.error('[Chat] API 返回 ok: false', errorMsg)
         
         const botMsgEl = document.createElement('div')
-        botMsgEl.className = 'message bot'
+        botMsgEl.className = 'message bot error'
         botMsgEl.textContent = `❌ 錯誤：${errorMsg}`
         messagesEl.appendChild(botMsgEl)
         messagesEl.scrollTop = messagesEl.scrollHeight
@@ -199,7 +233,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       
       // 移除載入提示
-      messagesEl.removeChild(loadingEl)
+      if (messagesEl.contains(loadingEl)) {
+        messagesEl.removeChild(loadingEl)
+      }
       
       // 解析 AI 回應 - 支援多種回應格式
       let aiResponse = '無法解析回應'
@@ -233,21 +269,26 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('[Chat] 錯誤堆棧:', err.stack)
       
       // 確保移除載入提示
-      if (messagesEl.contains(loadingEl)) {
-        messagesEl.removeChild(loadingEl)
-      }
+      const loadingEls = messagesEl.querySelectorAll('.message.bot.loading')
+      loadingEls.forEach(el => {
+        if (messagesEl.contains(el)) {
+          messagesEl.removeChild(el)
+        }
+      })
       
       // 判斷錯誤類型
       let errorMessage = err.message
       if (err instanceof TypeError && err.message.includes('fetch')) {
-        errorMessage = '無法連接到伺服器，請檢查網路連線'
+        errorMessage = '無法連接到伺服器，請檢查網路連線和後端服務是否運行'
       } else if (err instanceof TypeError && err.message.includes('JSON')) {
         errorMessage = '伺服器返回無效資料'
+      } else if (err.message.includes('超時')) {
+        errorMessage = err.message
       }
       
       const botMsgEl = document.createElement('div')
-      botMsgEl.className = 'message bot'
-      botMsgEl.textContent = `❌ 異常錯誤：${errorMessage}`
+      botMsgEl.className = 'message bot error'
+      botMsgEl.textContent = `❌ ${errorMessage}`
       messagesEl.appendChild(botMsgEl)
       messagesEl.scrollTop = messagesEl.scrollHeight
       
