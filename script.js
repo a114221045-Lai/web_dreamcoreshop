@@ -217,7 +217,7 @@ const contactForm = document.getElementById('contact-form')
       
       const response = await fetch('/api/contact', {
         method: 'POST',
-        body: JSON.stringify(data),
+        body: JSON.stringify(values),
         headers: { 'Content-Type': 'application/json' }
         })
       .then(async (response) => {
