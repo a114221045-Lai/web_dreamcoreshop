@@ -101,6 +101,9 @@ document.addEventListener('DOMContentLoaded', () => {
         ? 'http://localhost:3000/api/chat'
         : `${window.location.origin}/api/chat`
       
+      console.log('[Chat] 發送請求到:', apiUrl)
+      console.log('[Chat] 消息:', userText)
+      
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -110,7 +113,28 @@ document.addEventListener('DOMContentLoaded', () => {
         })
       })
 
-      const data = await response.json()
+      console.log('[Chat] HTTP 狀態:', response.status, response.statusText)
+      
+      // 檢查回應是否為 JSON
+      const contentType = response.headers.get('content-type')
+      console.log('[Chat] Content-Type:', contentType)
+      
+      let data
+      try {
+        const responseText = await response.text()
+        console.log('[Chat] 原始回應 (前 200 字元):', responseText.substring(0, 200))
+        data = JSON.parse(responseText)
+      } catch (parseErr) {
+        console.error('[Chat] JSON 解析失敗:', parseErr)
+        // 移除載入提示
+        messagesEl.removeChild(loadingEl)
+        const botMsgEl = document.createElement('div')
+        botMsgEl.className = 'message bot'
+        botMsgEl.textContent = `❌ 伺服器錯誤：無效回應 (HTTP ${response.status})。請檢查後端是否運行。`
+        messagesEl.appendChild(botMsgEl)
+        console.error('完整回應:', responseText)
+        return
+      }
       
       // 移除載入提示
       messagesEl.removeChild(loadingEl)
@@ -119,23 +143,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const errorMsg = data.error || '無法取得回應，請檢查網路連線或 API 設定。'
         const botMsgEl = document.createElement('div')
         botMsgEl.className = 'message bot'
-        botMsgEl.textContent = `錯誤：${errorMsg}`
+        botMsgEl.textContent = `❌ 錯誤：${errorMsg}`
         messagesEl.appendChild(botMsgEl)
       } else {
-        // 解析 AI 回應
-        const aiResponse = data.response?.choices?.[0]?.message?.content || '無法解析回應'
+        // 解析 AI 回應 - 支援多種回應格式
+        let aiResponse = '無法解析回應'
+        
+        // 嘗試不同的回應格式
+        if (data.response?.choices?.[0]?.message?.content) {
+          // OpenRouter SDK 格式
+          aiResponse = data.response.choices[0].message.content
+        } else if (data.response?.content) {
+          // 簡化格式
+          aiResponse = data.response.content
+        } else if (typeof data.response === 'string') {
+          // 直接字串回應
+          aiResponse = data.response
+        } else if (data.response?.text) {
+          // 另一種格式
+          aiResponse = data.response.text
+        }
+        
         const botMsgEl = document.createElement('div')
         botMsgEl.className = 'message bot'
         botMsgEl.textContent = aiResponse
         messagesEl.appendChild(botMsgEl)
       }
     } catch (err) {
-      messagesEl.removeChild(loadingEl)
+      console.error('[Chat] 捕捉到異常:', err)
+      if (messagesEl.contains(loadingEl)) {
+        messagesEl.removeChild(loadingEl)
+      }
       const botMsgEl = document.createElement('div')
       botMsgEl.className = 'message bot'
-      botMsgEl.textContent = `異常：${err.message}`
+      botMsgEl.textContent = `❌ 異常：${err.message}`
       messagesEl.appendChild(botMsgEl)
-      console.error('Chat error:', err)
     }
 
     messagesEl.scrollTop = messagesEl.scrollHeight

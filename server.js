@@ -33,10 +33,12 @@ app.post('/api/chat', async (req, res) => {
     const { messages, model } = req.body
 
     if (!messages || !Array.isArray(messages)) {
+      console.warn(`[${new Date().toISOString()}] Invalid messages:`, typeof messages)
       return res.status(400).json({ ok: false, error: 'messages 必須為陣列' })
     }
 
     if (messages.length === 0) {
+      console.warn(`[${new Date().toISOString()}] Empty messages array`)
       return res.status(400).json({ ok: false, error: 'messages 不能為空' })
     }
 
@@ -44,11 +46,18 @@ app.post('/api/chat', async (req, res) => {
 
     const response = await sendMessage({ messages, model })
     
-    console.log(`[${new Date().toISOString()}] Chat response received`)
+    console.log(`[${new Date().toISOString()}] Chat response received, type:`, typeof response)
+    
+    // 確保回應總是返回 JSON
+    res.setHeader('Content-Type', 'application/json; charset=utf-8')
     res.json({ ok: true, response })
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Chat error:`, err && err.message ? err.message : err)
-    res.status(500).json({ ok: false, error: err && err.message ? err.message : 'server error' })
+    const errMsg = err && err.message ? err.message : String(err)
+    console.error(`[${new Date().toISOString()}] Chat error:`, errMsg)
+    console.error(`[${new Date().toISOString()}] Error stack:`, err && err.stack ? err.stack : 'no stack')
+    
+    res.setHeader('Content-Type', 'application/json; charset=utf-8')
+    res.status(500).json({ ok: false, error: errMsg })
   }
 })
 
@@ -84,9 +93,20 @@ app.post('/api/contact', (req, res) => {
 
 /**
  * 捕捉 404 - 返回前端首頁（SPA 支持）
+ * 注意：必須放在所有 API 路由之後
  */
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'index.html'))
+app.use((req, res, next) => {
+  // 如果不是 API 路由，嘗試返回靜態檔案或首頁
+  if (!req.path.startsWith('/api')) {
+    // 嘗試發送首頁供 SPA 使用
+    return res.sendFile(path.join(__dirname, '..', 'index.html'), (err) => {
+      if (err) {
+        res.status(404).json({ ok: false, error: 'Not found' })
+      }
+    })
+  }
+  // API 路由 404
+  res.status(404).json({ ok: false, error: 'API endpoint not found' })
 })
 
 app.listen(PORT, () => {
