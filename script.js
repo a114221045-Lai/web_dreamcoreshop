@@ -158,58 +158,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ============ 聯絡表單 ============
   const contactForm = document.getElementById('contact-form')
-  
-  /**
-   * 前端 Email 驗證 (與後端一致)
-   */
-  function validateContactForm() {
-    const formData = new FormData(contactForm)
-    const name = (formData.get('name') || '').trim()
-    const email = (formData.get('email') || '').trim()
-    const message = (formData.get('message') || '').trim()
-    const errors = {}
-
-    if (!name) {
-      errors.name = '姓名不能為空'
-    } else if (name.length > 100) {
-      errors.name = '姓名不能超過 100 個字'
-    }
-
-    if (!email) {
-      errors.email = 'Email 不能為空'
-    } else {
-      // RFC 5322 相容的 Email 驗證
-      const emailRegex = /^[a-zA-Z0-9._+%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
-      if (!emailRegex.test(email)) {
-        errors.email = '請提供有效的電子郵件地址 (例如: user@example.com)'
-      }
-    }
-
-    if (!message) {
-      errors.message = '訊息不能為空'
-    } else if (message.length > 5000) {
-      errors.message = '訊息不能超過 5000 個字'
-    }
-
-    return { valid: Object.keys(errors).length === 0, errors, values: { name, email, message } }
-  }
-
   contactForm.addEventListener('submit', async (e) => {
     e.preventDefault()
-
-    // 前端驗證
-    const { valid, errors, values } = validateContactForm()
-    if (!valid) {
-      const errorMessages = Object.values(errors).join('\n')
-      alert('⚠️ 表單驗證失敗：\n' + errorMessages)
-      return
-    }
-
-    const submitBtn = contactForm.querySelector('button[type="submit"]')
-    const originalText = submitBtn.textContent
-    submitBtn.disabled = true
-    submitBtn.textContent = '⏳ 送出中...'
-
+    const formData = new FormData(contactForm)
+    const name = formData.get('name')
+    const email = formData.get('email')
+    const message = formData.get('message')
+    
     try {
       const apiUrl = window.location.hostname === 'localhost' 
         ? 'http://localhost:3000/api/contact'
@@ -218,40 +173,20 @@ document.addEventListener('DOMContentLoaded', () => {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values)
+        body: JSON.stringify({ name, email, message })
       })
 
-      let data
-      try {
-        data = await response.json()
-      } catch (parseErr) {
-        console.error('JSON parse error:', parseErr)
-        throw new Error('服務器回應格式錯誤')
-      }
-
+      const data = await response.json()
+      
       if (response.ok && data.ok) {
-        alert('✅ 成功！\n' + data.message)
+        alert('✅ ' + data.message)
         contactForm.reset()
-        if (submitBtn) {
-          submitBtn.textContent = '已送出'
-          setTimeout(() => {
-            submitBtn.textContent = originalText
-            submitBtn.disabled = false
-          }, 2000)
-        }
       } else {
-        const errorMsg = data.errors && data.errors[Object.keys(data.errors)[0]] 
-          ? data.errors[Object.keys(data.errors)[0]]
-          : (data.error || '無法發送訊息')
-        alert('❌ 發送失敗：\n' + errorMsg)
-        submitBtn.disabled = false
-        submitBtn.textContent = originalText
+        alert('❌ 錯誤：' + (data.error || '無法發送訊息'))
       }
     } catch (err) {
       console.error('Contact form error:', err)
-      alert('❌ 發送失敗：\n' + (err.message || '網路連線錯誤，請稍後重試'))
-      submitBtn.disabled = false
-      submitBtn.textContent = originalText
+      alert('❌ 發送失敗：' + err.message)
     }
   })
 
