@@ -104,84 +104,94 @@ document.addEventListener('DOMContentLoaded', () => {
       console.log('[Chat] 發送請求到:', apiUrl)
       console.log('[Chat] 消息:', userText)
       
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: userText }],
-          model: 'google/gemma-3-27b-it:free'
-        })
-      })
-
-      console.log('[Chat] HTTP 狀態:', response.status, response.statusText)
-      
-      // 檢查回應是否為 JSON
-      const contentType = response.headers.get('content-type')
-      console.log('[Chat] Content-Type:', contentType)
-      
-      let data
+      let responseText = '' // 在外層定義變數，避免作用域問題
       try {
-        const responseText = await response.text()
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: userText }],
+            model: 'google/gemma-3-27b-it:free'
+          })
+        })
+
+        console.log('[Chat] HTTP 狀態:', response.status, response.statusText)
+        
+        // 檢查回應是否為 JSON
+        const contentType = response.headers.get('content-type')
+        console.log('[Chat] Content-Type:', contentType)
+        
+        responseText = await response.text()
         console.log('[Chat] 原始回應 (前 200 字元):', responseText.substring(0, 200))
-        data = JSON.parse(responseText)
-      } catch (parseErr) {
-        console.error('[Chat] JSON 解析失敗:', parseErr)
+        
+        let data
+        try {
+          data = JSON.parse(responseText)
+        } catch (parseErr) {
+          console.error('[Chat] JSON 解析失敗:', parseErr)
+          // 移除載入提示
+          messagesEl.removeChild(loadingEl)
+          const botMsgEl = document.createElement('div')
+          botMsgEl.className = 'message bot'
+          botMsgEl.textContent = `❌ 伺服器錯誤：無效回應 (HTTP ${response.status})。請檢查後端是否運行。`
+          messagesEl.appendChild(botMsgEl)
+          console.error('[Chat] 完整回應:', responseText)
+          return
+        }
+        
         // 移除載入提示
         messagesEl.removeChild(loadingEl)
-        const botMsgEl = document.createElement('div')
-        botMsgEl.className = 'message bot'
-        botMsgEl.textContent = `❌ 伺服器錯誤：無效回應 (HTTP ${response.status})。請檢查後端是否運行。`
-        messagesEl.appendChild(botMsgEl)
-        console.error('完整回應:', responseText)
-        return
-      }
-      
-      // 移除載入提示
-      messagesEl.removeChild(loadingEl)
 
-      if (!response.ok || !data.ok) {
-        const errorMsg = data.error || '無法取得回應，請檢查網路連線或 API 設定。'
-        const botMsgEl = document.createElement('div')
-        botMsgEl.className = 'message bot'
-        botMsgEl.textContent = `❌ 錯誤：${errorMsg}`
-        messagesEl.appendChild(botMsgEl)
-      } else {
-        // 解析 AI 回應 - 支援多種回應格式
-        let aiResponse = '無法解析回應'
+        if (!response.ok || !data.ok) {
+          const errorMsg = data.error || '無法取得回應，請檢查網路連線或 API 設定。'
+          const botMsgEl = document.createElement('div')
+          botMsgEl.className = 'message bot'
+          botMsgEl.textContent = `❌ 錯誤：${errorMsg}`
+          messagesEl.appendChild(botMsgEl)
+        } else {
+          // 解析 AI 回應 - 支援多種回應格式
+          let aiResponse = '無法解析回應'
+          
+          // 嘗試不同的回應格式
+          if (data.response?.choices?.[0]?.message?.content) {
+            // OpenRouter SDK 格式
+            aiResponse = data.response.choices[0].message.content
+          } else if (data.response?.content) {
+            // 簡化格式
+            aiResponse = data.response.content
+          } else if (typeof data.response === 'string') {
+            // 直接字串回應
+            aiResponse = data.response
+          } else if (data.response?.text) {
+            // 另一種格式
+            aiResponse = data.response.text
+          }
+          
+          const botMsgEl = document.createElement('div')
+          botMsgEl.className = 'message bot'
+          botMsgEl.textContent = aiResponse
+          messagesEl.appendChild(botMsgEl)
+        }
+      } catch (err) {
+        console.error('[Chat] 捕捉到異常:', err)
+        if (messagesEl.contains(loadingEl)) {
+          messagesEl.removeChild(loadingEl)
+        }
         
-        // 嘗試不同的回應格式
-        if (data.response?.choices?.[0]?.message?.content) {
-          // OpenRouter SDK 格式
-          aiResponse = data.response.choices[0].message.content
-        } else if (data.response?.content) {
-          // 簡化格式
-          aiResponse = data.response.content
-        } else if (typeof data.response === 'string') {
-          // 直接字串回應
-          aiResponse = data.response
-        } else if (data.response?.text) {
-          // 另一種格式
-          aiResponse = data.response.text
+        // 更詳細的錯誤訊息
+        let errorMsg = err.message
+        if (err.message.includes('Failed to fetch') || err.message.includes('404')) {
+          errorMsg = '無法連接到伺服器 (404)。請確保後端在 http://localhost:3000 運行'
         }
         
         const botMsgEl = document.createElement('div')
         botMsgEl.className = 'message bot'
-        botMsgEl.textContent = aiResponse
+        botMsgEl.textContent = `❌ 異常：${errorMsg}`
         messagesEl.appendChild(botMsgEl)
       }
-    } catch (err) {
-      console.error('[Chat] 捕捉到異常:', err)
-      if (messagesEl.contains(loadingEl)) {
-        messagesEl.removeChild(loadingEl)
-      }
-      const botMsgEl = document.createElement('div')
-      botMsgEl.className = 'message bot'
-      botMsgEl.textContent = `❌ 異常：${err.message}`
-      messagesEl.appendChild(botMsgEl)
-    }
 
-    messagesEl.scrollTop = messagesEl.scrollHeight
-  }
+      messagesEl.scrollTop = messagesEl.scrollHeight
+    }
 
   /**
    * 送出按鈕點擊事件
