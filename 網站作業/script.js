@@ -122,8 +122,24 @@ document.addEventListener('DOMContentLoaded', () => {
         botMsgEl.textContent = `錯誤：${errorMsg}`
         messagesEl.appendChild(botMsgEl)
       } else {
-        // 解析 AI 回應
-        const aiResponse = data.response?.choices?.[0]?.message?.content || '無法解析回應'
+        // 解析 AI 回應 - 支援多種回應格式
+        let aiResponse = '無法解析回應'
+        
+        // 嘗試不同的回應格式
+        if (data.response?.choices?.[0]?.message?.content) {
+          // OpenRouter SDK 格式
+          aiResponse = data.response.choices[0].message.content
+        } else if (data.response?.content) {
+          // 簡化格式
+          aiResponse = data.response.content
+        } else if (typeof data.response === 'string') {
+          // 直接字串回應
+          aiResponse = data.response
+        } else if (data.response?.text) {
+          // 另一種格式
+          aiResponse = data.response.text
+        }
+        
         const botMsgEl = document.createElement('div')
         botMsgEl.className = 'message bot'
         botMsgEl.textContent = aiResponse

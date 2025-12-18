@@ -188,16 +188,30 @@
 
         let output = `<span class="status ${status}">${response.status} ${response.statusText}</span>\n耗時：${elapsed}ms\n\n`
         
-        if (data.ok && data.response?.choices?.[0]?.message?.content) {
-          output += `AI 回應：\n${data.response.choices[0].message.content}\n\n`
-          output += `完整回應：\n${JSON.stringify(data, null, 2)}`
+        if (data.ok) {
+          let aiResponse = '無法解析回應'
+          
+          // 嘗試多種回應格式
+          if (data.response?.choices?.[0]?.message?.content) {
+            aiResponse = data.response.choices[0].message.content
+          } else if (data.response?.content) {
+            aiResponse = data.response.content
+          } else if (typeof data.response === 'string') {
+            aiResponse = data.response
+          } else if (data.response?.text) {
+            aiResponse = data.response.text
+          }
+          
+          output += `✅ AI 回應：\n${aiResponse}\n\n`
+          output += `📋 完整回應結構：\n${JSON.stringify(data, null, 2)}`
         } else {
-          output += JSON.stringify(data, null, 2)
+          output += `❌ 錯誤：${data.error || '未知錯誤'}\n\n`
+          output += `完整回應：\n${JSON.stringify(data, null, 2)}`
         }
         
-        dataEl.innerHTML = output
+        dataEl.textContent = output
       } catch (err) {
-        dataEl.innerHTML = `<span class="status error">異常</span>\n\n${err.message}\n${err.stack || ''}`
+        dataEl.textContent = `❌ 異常錯誤\n\n${err.message}\n\n${err.stack || '無堆疊信息'}`
       } finally {
         btn.disabled = false
         btn.textContent = '發送聊天請求'

@@ -3,7 +3,7 @@
  * 使用 @openrouter/sdk + 指數退避重試機制
  */
 const retry = require('async-retry')
-const { OpenRouter } = require('@openrouter/sdk')
+const OpenRouter = require('@openrouter/sdk').default || require('@openrouter/sdk')
 
 /**
  * 初始化 OpenRouter 客戶端
@@ -13,10 +13,12 @@ function initializeClient() {
   const apiKey = process.env.OPENROUTER_API_KEY || process.env.API_KEY
   if (!apiKey) throw new Error('OPENROUTER_API_KEY 未設定於環境變數中')
   
-  return new OpenRouter({
-    apiKey: apiKey,
-    baseURL: 'https://openrouter.ai/api/v1'
+  // 直接使用 OpenRouter 作為建構函式
+  const client = new OpenRouter({
+    apiKey: apiKey
   })
+  
+  return client
 }
 
 /**
@@ -35,18 +37,30 @@ async function sendMessage(opts = {}) {
 
   return await retry(async (bail) => {
     try {
-      const response = await client.chat.send({
+      console.log(`[ORAPI] 準備發送請求到 ${model}`)
+      
+      const response = await client.chat.completions.create({
         model: model,
         messages: payloadMessages,
         temperature: 0.7,
         max_tokens: 500
       })
 
+      console.log(`[ORAPI] 收到回應，處理中...`)
       return response
     } catch (err) {
+      console.error(`[ORAPI] 錯誤: ${err.message}`, err)
+      
       // 4xx 客戶端錯誤不重試
       if (err.status && err.status >= 400 && err.status < 500) {
         bail(err)
+        return
+      }
+      
+      // 401 未授權 - API Key 問題
+      if (err.status === 401) {
+        const authErr = new Error('API 金鑰認證失敗：請檢查 OPENROUTER_API_KEY 是否正確')
+        bail(authErr)
         return
       }
       
@@ -60,10 +74,10 @@ async function sendMessage(opts = {}) {
       throw err
     }
   }, {
-    retries: 4,
+    retries: 3,
     factor: 2,
-    minTimeout: 500,
-    maxTimeout: 4000,
+    minTimeout: 1000,
+    maxTimeout: 5000,
     onRetry: (err, attempt) => {
       console.warn(`[ORAPI] 重試第 ${attempt} 次：${err.message}`)
     }
