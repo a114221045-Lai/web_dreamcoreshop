@@ -72,14 +72,11 @@ document.addEventListener('DOMContentLoaded', () => {
   })
 
   /**
-   * 傳送聊天訊息至後端 - 含超時控制和改進的錯誤處理
-   * @returns {Promise<{success: boolean, message: string}>}
+   * 傳送聊天訊息至後端
    */
   async function sendMessage() {
     const userText = inputEl.value.trim()
-    if (!userText) {
-      return { success: false, message: '請輸入訊息' }
-    }
+    if (!userText) return
 
     // 清空輸入框
     inputEl.value = ''
@@ -94,21 +91,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // 顯示載入中提示
     const loadingEl = document.createElement('div')
     loadingEl.className = 'message bot loading'
-    loadingEl.innerHTML = '⏳ AI 思考中... <span class="dot-animation"></span>'
+    loadingEl.textContent = 'AI 正在思考...'
     messagesEl.appendChild(loadingEl)
     messagesEl.scrollTop = messagesEl.scrollHeight
 
     try {
-      // 構建 API URL
+      // 呼叫後端 /api/chat
       const apiUrl = window.location.hostname === 'localhost' 
         ? 'http://localhost:3000/api/chat'
         : `${window.location.origin}/api/chat`
       
-      console.log('[Chat] 發送請求到:', apiUrl, '超時時間: 45秒')
-      console.log('[Chat] 消息:', userText)
-      
-      // 建立超時 Promise (45 秒 = 前端超時 > 後端超時 30 秒)
-      const fetchPromise = fetch(apiUrl, {
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -117,228 +110,35 @@ document.addEventListener('DOMContentLoaded', () => {
         })
       })
 
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-          reject(new Error('⏱️ 請求超時 (45秒)，OpenRouter 伺服器可能不可用或響應緩慢。請檢查 API Key 或稍後重試'))
-        }, 45000)
-      })
-
-      // 與超時 Promise 賽跑
-      let response
-      try {
-        response = await Promise.race([fetchPromise, timeoutPromise])
-      } catch (timeoutErr) {
-        // 移除載入提示
-        if (messagesEl.contains(loadingEl)) {
-          messagesEl.removeChild(loadingEl)
-        }
-        
-        const botMsgEl = document.createElement('div')
-        botMsgEl.className = 'message bot error'
-        botMsgEl.textContent = timeoutErr.message
-        messagesEl.appendChild(botMsgEl)
-        messagesEl.scrollTop = messagesEl.scrollHeight
-        
-        console.error('[Chat] 超時錯誤:', timeoutErr.message)
-        return { success: false, message: timeoutErr.message }
-      }
-
-      console.log('[Chat] HTTP 狀態:', response.status, response.statusText)
-      
-      // 讀取原始回應文本
-      const responseText = await response.text()
-      console.log('[Chat] 原始回應長度:', responseText.length)
-      console.log('[Chat] 原始回應 (前 300 字元):', responseText.substring(0, 300))
-      
-      // 檢查響應是否為空
-      if (!responseText || responseText.trim().length === 0) {
-        // 移除載入提示
-        if (messagesEl.contains(loadingEl)) {
-          messagesEl.removeChild(loadingEl)
-        }
-        const botMsgEl = document.createElement('div')
-        botMsgEl.className = 'message bot error'
-        botMsgEl.textContent = `❌ 伺服器錯誤：空回應 (HTTP ${response.status})`
-        messagesEl.appendChild(botMsgEl)
-        console.error('[Chat] 錯誤：伺服器返回空回應')
-        messagesEl.scrollTop = messagesEl.scrollHeight
-        return { success: false, message: '伺服器返回空回應' }
-      }
-      
-      // 嘗試解析 JSON
-      let data
-      try {
-        data = JSON.parse(responseText)
-        console.log('[Chat] ✅ JSON 解析成功')
-        console.log('[Chat] 回應狀態:', data.status)
-      } catch (parseErr) {
-        console.error('[Chat] ❌ JSON 解析失敗:', parseErr.message)
-        console.error('[Chat] 原始回應長度:', responseText.length)
-        console.error('[Chat] 完整回應:', responseText.substring(0, 500))
-        
-        // 移除載入提示
-        if (messagesEl.contains(loadingEl)) {
-          messagesEl.removeChild(loadingEl)
-        }
-        
-        // 判斷是否為 HTML 錯誤頁面
-        if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
-          const botMsgEl = document.createElement('div')
-          botMsgEl.className = 'message bot error'
-          botMsgEl.textContent = `❌ API 路由錯誤 (HTTP ${response.status})：可能後端未正確配置或服務未運行`
-          messagesEl.appendChild(botMsgEl)
-          return { success: false, message: 'API 路由錯誤，請檢查後端配置' }
-        }
-        
-        const botMsgEl = document.createElement('div')
-        botMsgEl.className = 'message bot error'
-        botMsgEl.textContent = `❌ 伺服器返回無效 JSON (HTTP ${response.status})`
-        messagesEl.appendChild(botMsgEl)
-        messagesEl.scrollTop = messagesEl.scrollHeight
-        return { success: false, message: '無效的 JSON 回應' }
-      }
-      
-      // 檢查 HTTP 狀態
-      if (!response.ok) {
-        // 移除載入提示
-        if (messagesEl.contains(loadingEl)) {
-          messagesEl.removeChild(loadingEl)
-        }
-        
-        const errorMsg = data.error || `HTTP 錯誤 ${response.status}`
-        console.error('[Chat] 伺服器錯誤:', errorMsg)
-        
-        const botMsgEl = document.createElement('div')
-        botMsgEl.className = 'message bot error'
-        botMsgEl.textContent = `❌ 伺服器錯誤：${errorMsg}`
-        messagesEl.appendChild(botMsgEl)
-        messagesEl.scrollTop = messagesEl.scrollHeight
-        return { success: false, message: errorMsg }
-      }
-      
-      // 檢查業務邏輯狀態
-      if (!data.ok) {
-        // 移除載入提示
-        if (messagesEl.contains(loadingEl)) {
-          messagesEl.removeChild(loadingEl)
-        }
-        
-        const errorMsg = data.error || '未知錯誤'
-        const errorStatus = data.status || 'unknown'
-        console.error('[Chat] ❌ API 返回失敗:', { error: errorMsg, status: errorStatus })
-        console.error('[Chat] 完整錯誤回應:', data)
-        
-        const botMsgEl = document.createElement('div')
-        botMsgEl.className = 'message bot error'
-        botMsgEl.textContent = `❌ 錯誤 [${errorStatus}]：${errorMsg}`
-        messagesEl.appendChild(botMsgEl)
-        messagesEl.scrollTop = messagesEl.scrollHeight
-        return { success: false, message: errorMsg }
-      }
+      const data = await response.json()
       
       // 移除載入提示
-      if (messagesEl.contains(loadingEl)) {
-        messagesEl.removeChild(loadingEl)
-      }
-      
-      // 解析 AI 回應 - 支持 OpenRouter 標準格式
-      let aiResponse = '無法解析回應'
-      console.log('[Chat] 開始解析 AI 回應...')
-      console.log('[Chat] response 結構:', {
-        hasChoices: !!data.response?.choices,
-        choicesLength: data.response?.choices?.length,
-        hasContent: !!data.response?.choices?.[0]?.message?.content
-      })
-      
-      if (data.response?.choices?.[0]?.message?.content) {
-        // OpenRouter SDK 標準格式
-        aiResponse = data.response.choices[0].message.content
-        console.log('[Chat] ✅ 使用 OpenRouter 標準格式: choices[0].message.content')
-      } else if (data.response?.content) {
-        // 簡化格式
-        aiResponse = data.response.content
-        console.log('[Chat] ✅ 使用簡化格式: response.content')
-      } else if (typeof data.response === 'string') {
-        // 直接字串回應
-        aiResponse = data.response
-        console.log('[Chat] ✅ 使用直接字串格式')
-      } else if (data.response?.text) {
-        // 另一種格式
-        aiResponse = data.response.text
-        console.log('[Chat] ✅ 使用 text 格式')
-      } else {
-        // 無法解析
-        console.error('[Chat] ❌ 無法解析回應結構:', JSON.stringify(data.response).substring(0, 300))
-      }
-      
-      if (aiResponse === '無法解析回應') {
-        const parseErr = new Error('無法從回應中提取 AI 訊息')
-        if (messagesEl.contains(loadingEl)) {
-          messagesEl.removeChild(loadingEl)
-        }
+      messagesEl.removeChild(loadingEl)
+
+      if (!response.ok || !data.ok) {
+        const errorMsg = data.error || '無法取得回應，請檢查網路連線或 API 設定。'
         const botMsgEl = document.createElement('div')
-        botMsgEl.className = 'message bot error'
-        botMsgEl.textContent = `❌ 解析失敗：${parseErr.message}`
+        botMsgEl.className = 'message bot'
+        botMsgEl.textContent = `錯誤：${errorMsg}`
         messagesEl.appendChild(botMsgEl)
-        messagesEl.scrollTop = messagesEl.scrollHeight
-        return { success: false, message: parseErr.message }
+      } else {
+        // 解析 AI 回應
+        const aiResponse = data.response?.choices?.[0]?.message?.content || '無法解析回應'
+        const botMsgEl = document.createElement('div')
+        botMsgEl.className = 'message bot'
+        botMsgEl.textContent = aiResponse
+        messagesEl.appendChild(botMsgEl)
       }
-      
-      console.log('[Chat] ✅ 成功獲取 AI 回應:', aiResponse.substring(0, 50) + '...')
-      console.log('[Chat] 回應長度:', aiResponse.length, '字元')
-        // OpenRouter SDK 格式
-        aiResponse = data.response.choices[0].message.content
-      } else if (data.response?.content) {
-        // 簡化格式
-        aiResponse = data.response.content
-      } else if (typeof data.response === 'string') {
-        // 直接字串回應
-        aiResponse = data.response
-      } else if (data.response?.text) {
-        // 另一種格式
-        aiResponse = data.response.text
-      }
-      
-      console.log('[Chat] 成功獲取 AI 回應:', aiResponse.substring(0, 50) + '...')
-      
+    } catch (err) {
+      messagesEl.removeChild(loadingEl)
       const botMsgEl = document.createElement('div')
       botMsgEl.className = 'message bot'
-      botMsgEl.textContent = aiResponse
+      botMsgEl.textContent = `異常：${err.message}`
       messagesEl.appendChild(botMsgEl)
-      messagesEl.scrollTop = messagesEl.scrollHeight
-      
-      return { success: true, message: 'AI 回應成功' }
-      
-    } catch (err) {
-      console.error('[Chat] 捕捉到異常:', err.name, err.message)
-      console.error('[Chat] 錯誤堆棧:', err.stack)
-      
-      // 確保移除載入提示
-      const loadingEls = messagesEl.querySelectorAll('.message.bot.loading')
-      loadingEls.forEach(el => {
-        if (messagesEl.contains(el)) {
-          messagesEl.removeChild(el)
-        }
-      })
-      
-      // 判斷錯誤類型
-      let errorMessage = err.message
-      if (err instanceof TypeError && err.message.includes('fetch')) {
-        errorMessage = '無法連接到伺服器，請檢查網路連線和後端服務是否運行'
-      } else if (err instanceof TypeError && err.message.includes('JSON')) {
-        errorMessage = '伺服器返回無效資料'
-      } else if (err.message.includes('超時')) {
-        errorMessage = err.message
-      }
-      
-      const botMsgEl = document.createElement('div')
-      botMsgEl.className = 'message bot error'
-      botMsgEl.textContent = `❌ ${errorMessage}`
-      messagesEl.appendChild(botMsgEl)
-      messagesEl.scrollTop = messagesEl.scrollHeight
-      
-      return { success: false, message: errorMessage }
+      console.error('Chat error:', err)
     }
+
+    messagesEl.scrollTop = messagesEl.scrollHeight
   }
 
   /**
@@ -357,58 +157,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ============ 聯絡表單 ============
   const contactForm = document.getElementById('contact-form')
-  
-  /**
-   * 前端 Email 驗證 (與後端一致)
-   */
-  function validateContactForm() {
-    const formData = new FormData(contactForm)
-    const name = (formData.get('name') || '').trim()
-    const email = (formData.get('email') || '').trim()
-    const message = (formData.get('message') || '').trim()
-    const errors = {}
-
-    if (!name) {
-      errors.name = '姓名不能為空'
-    } else if (name.length > 100) {
-      errors.name = '姓名不能超過 100 個字'
-    }
-
-    if (!email) {
-      errors.email = 'Email 不能為空'
-    } else {
-      // RFC 5322 相容的 Email 驗證
-      const emailRegex = /^[a-zA-Z0-9._+%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
-      if (!emailRegex.test(email)) {
-        errors.email = '請提供有效的電子郵件地址 (例如: user@example.com)'
-      }
-    }
-
-    if (!message) {
-      errors.message = '訊息不能為空'
-    } else if (message.length > 5000) {
-      errors.message = '訊息不能超過 5000 個字'
-    }
-
-    return { valid: Object.keys(errors).length === 0, errors, values: { name, email, message } }
-  }
-
   contactForm.addEventListener('submit', async (e) => {
     e.preventDefault()
-
-    // 前端驗證
-    const { valid, errors, values } = validateContactForm()
-    if (!valid) {
-      const errorMessages = Object.values(errors).join('\n')
-      alert('⚠️ 表單驗證失敗：\n' + errorMessages)
-      return
-    }
-
-    const submitBtn = contactForm.querySelector('button[type="submit"]')
-    const originalText = submitBtn.textContent
-    submitBtn.disabled = true
-    submitBtn.textContent = '⏳ 送出中...'
-
+    const formData = new FormData(contactForm)
+    const name = formData.get('name')
+    const email = formData.get('email')
+    const message = formData.get('message')
+    
     try {
       const apiUrl = window.location.hostname === 'localhost' 
         ? 'http://localhost:3000/api/contact'
@@ -417,40 +172,20 @@ document.addEventListener('DOMContentLoaded', () => {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values)
+        body: JSON.stringify({ name, email, message })
       })
 
-      let data
-      try {
-        data = await response.json()
-      } catch (parseErr) {
-        console.error('JSON parse error:', parseErr)
-        throw new Error('服務器回應格式錯誤')
-      }
-
+      const data = await response.json()
+      
       if (response.ok && data.ok) {
-        alert('✅ 成功！\n' + data.message)
+        alert('✅ ' + data.message)
         contactForm.reset()
-        if (submitBtn) {
-          submitBtn.textContent = '已送出'
-          setTimeout(() => {
-            submitBtn.textContent = originalText
-            submitBtn.disabled = false
-          }, 2000)
-        }
       } else {
-        const errorMsg = data.errors && data.errors[Object.keys(data.errors)[0]] 
-          ? data.errors[Object.keys(data.errors)[0]]
-          : (data.error || '無法發送訊息')
-        alert('❌ 發送失敗：\n' + errorMsg)
-        submitBtn.disabled = false
-        submitBtn.textContent = originalText
+        alert('❌ 錯誤：' + (data.error || '無法發送訊息'))
       }
     } catch (err) {
       console.error('Contact form error:', err)
-      alert('❌ 發送失敗：\n' + (err.message || '網路連線錯誤，請稍後重試'))
-      submitBtn.disabled = false
-      submitBtn.textContent = originalText
+      alert('❌ 發送失敗：' + err.message)
     }
   })
 
