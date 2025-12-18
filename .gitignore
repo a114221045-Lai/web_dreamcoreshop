@@ -12,3 +12,4 @@ package-lock.json
 .idea/
 .vscode/
 .specstory/
+.env*.local

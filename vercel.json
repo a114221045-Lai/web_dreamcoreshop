@@ -4,6 +4,10 @@
     {
       "src": "backend/server.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
@@ -12,8 +16,17 @@
       "dest": "backend/server.js"
     },
     {
-      "src": "/(.*)",
+      "src": "/(.*\\.(?:css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$)",
       "dest": "/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "backend/server.js"
     }
-  ]
+  ],
+  "env": {
+    "OPENROUTER_MODEL": "google/gemma-3-27b-it:free",
+    "USE_MOCK_MODE": "true",
+    "PORT": "3000"
+  }
 }
