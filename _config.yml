@@ -1,0 +1,33 @@
+# Jekyll 的主要設定檔 (_config.yml)
+
+# 網站基本資訊
+title: DreamCore Shop
+description: 一個使用 Jekyll 建置的 GitHub Pages 專案
+baseurl: "" # 如果有子路徑，這裡要填，例如 "/blog"
+url: "https://a114221045-Lai.github.io/web_dreamcoreshop"
+
+# 使用的主題
+theme: jekyll-theme-primer
+
+# 外掛 (GitHub Pages 支援的安全清單)
+plugins:
+  - jekyll-seo-tag
+  - jekyll-paginate
+  - jekyll-relative-links
+  - jekyll-optional-front-matter
+  - jekyll-readme-index
+  - jekyll-default-layout
+  - jekyll-titles-from-headings
+
+# 分頁設定 (可選)
+paginate: 5
+paginate_path: "/page:num/"
+
+# 排除不需要 Jekyll 處理的檔案或資料夾
+exclude:
+  - node_modules
+  - backend/node_modules
+  - vendor
+  - Gemfile
+  - Gemfile.lock
+  - README.md
